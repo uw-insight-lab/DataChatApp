@@ -1,3 +1,10 @@
+# Ignore all files in the .vscode directory
+.vscode/
+.DS_Store
+scratch.txt
+saved_chats.json
+agent_config.json
+variables.env
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

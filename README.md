@@ -41,4 +41,16 @@ Example template application for building an LLM-power chart bot that is meant t
    python -c "import pandas; print('Setup successful!')"
    ```
 
+### Running this library
+1. Run the Streamlit app
+   ```bash
+   # Start the Streamlit server
+   streamlit run DataChatApp.py
+   ```
+
+2. Open your web browser and navigate to the URL shown in the terminal (typically http://localhost:8501)
+
+3. Enter your Gemini API key in the sidebar [ this will be provided in class ]
+
+4. Start chatting with the assistant about your data!
 
