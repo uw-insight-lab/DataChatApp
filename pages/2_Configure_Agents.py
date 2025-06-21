@@ -19,9 +19,9 @@ if "agents" not in st.session_state:
     else:
         st.session_state.agents = [{
             "name": "Default Agent",
-            "persona": """You are a helpful AI assistant focused on data analysis and insights. You communicate clearly and professionally while maintaining a friendly tone. You ask clarifying questions when needed and provide detailed explanations for your analysis.""",
-        "active": True
-    }]
+            "persona": "You are a helpful AI assistant focused on data analysis and insights. You communicate clearly and professionally while maintaining a friendly tone. You ask clarifying questions when needed and provide detailed explanations for your analysis. To answer questions use the following data: TEST. Whenever possible, show a data visualization with an explanation. Use the MATPLOTLIB library to create the visualizations. If you cannot answer the question with the dataset, say so, and provide only a short explanation, with no code.",
+            "active": True
+        }]
 
 st.title("Configure AI Agents 🤖")
 
