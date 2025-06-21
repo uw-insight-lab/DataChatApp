@@ -11,6 +11,7 @@ from datetime import datetime
 from utils.load_env import load_api_key_from_env
 import matplotlib.pyplot as plt
 import matplotlib
+
 matplotlib.use('Agg')  # Use non-interactive backend
 
 _ENV_FILE_ = os.path.join(os.path.dirname(__file__),"variables.env")
@@ -178,6 +179,17 @@ if not st.session_state.agents:
     st.session_state.agents = [{
         "name": "Default Agent",
         "persona": DEFAULT_AGENT_PERSONA,
+        "response-schema":{
+                        'required': [
+                            'code',
+                            'explanation'
+                        ],
+                        'properties': {
+                            'code': {'type': 'STRING'},
+                            'explanation': {'type': 'STRING'}
+                        },
+                        'type': 'OBJECT',
+                    },
         "active": True
     }]
 
@@ -195,6 +207,14 @@ selected_persona = next(
     for agent in st.session_state.agents 
     if agent["name"] == selected_agent
 )
+
+# Get selected agent's response schema
+selected_schema = next(
+    agent["response-schema"]
+    for agent in st.session_state.agents
+    if agent["name"] == selected_agent
+)
+
 
 # Add system prompt if messages empty or if agent changed
 if not st.session_state.messages or (st.session_state.messages and st.session_state.messages[0].get("content") != selected_persona):
@@ -246,90 +266,96 @@ if prompt := st.chat_input("Ask me about your data..."):
     else:
         try:
             #initiate the chat
-            chat = client.chats.create(
-                model=selected_model,
-                config=types.GenerateContentConfig(
-                    system_instruction=selected_persona,
-                    response_mime_type='application/json',
-                    response_schema={
-                        'required': [
-                            'code',
-                            'explanation'
-                        ],
-                        'properties': {
-                            'code': {'type': 'STRING'},
-                            'explanation': {'type': 'STRING'}
-                        },
-                        'type': 'OBJECT',
-                    },
+            if selected_schema != {}:
+                chat = client.chats.create(
+                    model=selected_model,
+                    config=types.GenerateContentConfig(
+                        system_instruction=selected_persona,
+                        response_mime_type='application/json',
+                        response_schema=selected_schema
+                    )
                 )
-            )
+            else:
+                chat = client.chats.create(
+                    model=selected_model,
+                    config=types.GenerateContentConfig(
+                        system_instruction=selected_persona
+                    )
+                )
             
             # Generate response -- which is code and visualization
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    response = chat.send_message(prompt)
-                    #convert response.text to dict
-                    response_dict = json.loads(response.text)
-                    if response_dict['code'] is "":
-                        st.markdown(response_dict['explanation'])
-                    else:
-                        st.markdown(response_dict['explanation'])
-                        #st.code(response_dict['code'])
-                    
-                    # Execute the code and display chart if code exists
-                    chart_image = None
-                    if response_dict['code']:
-                        try:
-                            # Execute the code in a safe environment
-                            exec_globals = {}
-                            
-                            # Remove any .show() calls from the code as they don't work in Streamlit
-                            cleaned_code = response_dict['code'].replace('.show()', '')
-                            
-                            exec(cleaned_code, exec_globals)
-                            
-                            # Check if a matplotlib figure was created
-                            if 'plt' in exec_globals and plt.get_fignums():
-                                # Get the current figure
-                                fig = plt.gcf()
-                                
-                                # Set figure size to max 300px width (convert to inches, 150 DPI)
-                                # 300px / 100 DPI = 3 inches width
-                                current_size = fig.get_size_inches()
-                                max_width_inches = 3.0  # 300px / 100 DPI
-                                
-                                if current_size[0] > max_width_inches:
-                                    # Scale down proportionally
-                                    scale_factor = max_width_inches / current_size[0]
-                                    new_width = max_width_inches
-                                    new_height = current_size[1] * scale_factor
-                                    fig.set_size_inches(new_width, new_height)
-                                
-                                # Save the figure to a bytes buffer
-                                img_buffer = io.BytesIO()
-                                fig.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150)
-                                img_buffer.seek(0)
-                                
-                                # Convert to base64 for storage
-                                chart_image = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
-                                
-                                # Display the image in Streamlit with specific width
-                                st.image(img_buffer, width=350)
-                                
-                                # Clear the figure to prevent memory issues
-                                plt.close(fig)
-                                
-                        except Exception as e:
+            
+            if selected_schema != {}:
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        response = chat.send_message(prompt)
+                        #convert response.text to dict
+                        response_dict = json.loads(response.text)
+                        if response_dict['code'] == "":
                             st.markdown(response_dict['explanation'])
-                            
-                    # Add assistant response to chat history with chart image
-                    message_content = {
-                        'explanation': response_dict['explanation'],
-                        'code': response_dict['code'],
-                        'chart_image': chart_image
-                    }
-                    st.session_state.messages.append({"role": "assistant", "content": message_content})
-                    
+                        else:
+                            st.markdown(response_dict['explanation'])
+                            #st.code(response_dict['code'])
+                        
+                        # Execute the code and display chart if code exists
+                        chart_image = None
+                        if response_dict['code']:
+                            try:
+                                # Execute the code in a safe environment
+                                exec_globals = {}
+                                
+                                # Remove any .show() calls from the code as they don't work in Streamlit
+                                cleaned_code = response_dict['code'].replace('.show()', '')
+                                
+                                exec(cleaned_code, exec_globals)
+                                
+                                # Check if a matplotlib figure was created
+                                if 'plt' in exec_globals and plt.get_fignums():
+                                    # Get the current figure
+                                    fig = plt.gcf()
+                                    
+                                    # Set figure size to max 300px width (convert to inches, 150 DPI)
+                                    # 300px / 100 DPI = 3 inches width
+                                    current_size = fig.get_size_inches()
+                                    max_width_inches = 3.0  # 300px / 100 DPI
+                                    
+                                    if current_size[0] > max_width_inches:
+                                        # Scale down proportionally
+                                        scale_factor = max_width_inches / current_size[0]
+                                        new_width = max_width_inches
+                                        new_height = current_size[1] * scale_factor
+                                        fig.set_size_inches(new_width, new_height)
+                                    
+                                    # Save the figure to a bytes buffer
+                                    img_buffer = io.BytesIO()
+                                    fig.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150)
+                                    img_buffer.seek(0)
+                                    
+                                    # Convert to base64 for storage
+                                    chart_image = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+                                    
+                                    # Display the image in Streamlit with specific width
+                                    st.image(img_buffer, width=350)
+                                    
+                                    # Clear the figure to prevent memory issues
+                                    plt.close(fig)
+                                    
+                            except Exception as e:
+                                st.markdown(response_dict['explanation'])
+                                
+                        # Add assistant response to chat history with chart image
+                        message_content = {
+                            'explanation': response_dict['explanation'],
+                            'code': response_dict['code'],
+                            'chart_image': chart_image
+                        }
+                        st.session_state.messages.append({"role": "assistant", "content": message_content})
+            else:
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        response = chat.send_message(prompt)
+                        st.markdown(response.text)
+                        st.session_state.messages.append({"role": "assistant", "content": response.text})
+                        
         except Exception as e:
             st.error(f"Error generating response: {str(e)}")
